@@ -18,20 +18,29 @@ pipeline {
       }
     }
 
+    stage('Install Sonar Scanner') {
+      steps {
+        sh '''
+          echo "Downloading Sonar Scanner..."
+          if [ ! -d "${WORKSPACE}/sonar-scanner" ]; then
+            wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip -O scanner.zip
+            unzip -q scanner.zip -d .
+            mv sonar-scanner-* sonar-scanner
+            rm scanner.zip
+          fi
+        '''
+      }
+    }
+
     stage('Sonar Scan') {
       steps {
-        script {
-          docker.image('sonarsource/sonar-scanner-cli:latest')
-                .inside("--network ci-network -v ${env.WORKSPACE}:/usr/src") {
-            sh """
-              sonar-scanner \
-                -Dsonar.projectKey=java-new-1 \
-                -Dsonar.sources=. \
-                -Dsonar.host.url=${SONAR_HOST} \
-                -Dsonar.login=${SONAR_TOKEN}
-            """
-          }
-        }
+        sh '''
+          ./sonar-scanner/bin/sonar-scanner \
+            -Dsonar.projectKey=java-new-1 \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=${SONAR_HOST} \
+            -Dsonar.login=${SONAR_TOKEN}
+        '''
       }
     }
   }

@@ -34,13 +34,31 @@ pipeline {
 
     stage('Sonar Scan') {
       steps {
-        sh '''
-          ./sonar-scanner/bin/sonar-scanner \
-            -Dsonar.projectKey=java-new-1 \
-            -Dsonar.sources=. \
-            -Dsonar.host.url=${SONAR_HOST} \
-            -Dsonar.login=${SONAR_TOKEN}
-        '''
+        // use withSonarQubeEnv so Jenkins associates this analysis with configured Sonar server named 'Sonar'
+        withSonarQubeEnv('Sonar') {
+          sh '''
+            ./sonar-scanner/bin/sonar-scanner \
+              -Dsonar.projectKey=java-new-1 \
+              -Dsonar.sources=. \
+              -Dsonar.host.url=${SONAR_HOST} \
+              -Dsonar.token=${SONAR_TOKEN}
+          '''
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        // waits for SonarQube to call back and return the quality gate result
+        script {
+          timeout(time: 5, unit: 'MINUTES') {
+            def qg = waitForQualityGate()
+            echo "Quality Gate status: ${qg.status}"
+            if (qg.status != 'OK') {
+              error "Quality Gate failed: ${qg.status}"
+            }
+          }
+        }
       }
     }
   }

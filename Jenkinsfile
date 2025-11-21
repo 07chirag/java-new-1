@@ -1,35 +1,25 @@
 pipeline {
   agent any
   stages {
-    stage('Checkout') {
-      steps { checkout scm }
-    }
+    stage('Checkout') { steps { checkout scm } }
 
-    stage('SonarQube analysis') {
+    stage('SonarQube analysis (direct)') {
       steps {
-        // Replace 'MySonarServer' with the Sonar server name configured in Jenkins (if used)
-        withSonarQubeEnv('MySonarServer') {
+        withCredentials([string(credentialsId: 'sonar-token-id', variable: 'SONAR_TOKEN')]) {
           sh '''
+            # if sonar-scanner present in workspace:
             ./sonar-scanner/bin/sonar-scanner \
               -Dsonar.projectKey=java-new-1 \
               -Dsonar.sources=. \
-              -Dsonar.host.url=$SONAR_HOST_URL \
-              -Dsonar.login=$SONAR_AUTH_TOKEN
+              -Dsonar.host.url=http://sonarqube:9000 \
+              -Dsonar.login=$SONAR_TOKEN
           '''
         }
       }
     }
 
-    // Notice: no Quality Gate stage here
     stage('Build/Other') {
-      steps {
-        echo "Continue with other steps — pipeline won't fail on Sonar quality gate"
-      }
+      steps { echo "Continue pipeline — no waitForQualityGate" }
     }
-  }
-
-  post {
-    failure { echo "Pipeline failed" }
-    success { echo "Pipeline succeeded" }
   }
 }

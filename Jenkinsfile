@@ -18,41 +18,33 @@ pipeline {
       }
     }
 
-    stage('Install Sonar Scanner') {
-      steps {
-        sh '''
-          echo "Downloading Sonar Scanner..."
-          if [ ! -d "${WORKSPACE}/sonar-scanner" ]; then
-            wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip -O scanner.zip
-            unzip -q scanner.zip -d .
-            mv sonar-scanner-* sonar-scanner
-            rm scanner.zip
-          fi
-        '''
-      }
-    }
-
     stage('Sonar Scan') {
       steps {
-        // use withSonarQubeEnv so Jenkins associates this analysis with configured Sonar server named 'Sonar'
-        withSonarQubeEnv('Sonar') {
-          sh '''
-            ./sonar-scanner/bin/sonar-scanner \
-              -Dsonar.projectKey=java-new-1 \
-              -Dsonar.sources=. \
-              -Dsonar.host.url=${SONAR_HOST} \
-              -Dsonar.token=${SONAR_TOKEN}
-          '''
+        script {
+          // Option A: run scanner inside sonarsource docker image (uses network ci-network)
+          docker.image('sonarsource/sonar-scanner-cli:latest')
+                .inside("--network ci-network -v ${env.WORKSPACE}:/usr/src") {
+            sh """
+              sonar-scanner \
+                -Dsonar.projectKey=java-new-1 \
+                -Dsonar.sources=. \
+                -Dsonar.host.url=${SONAR_HOST} \
+                -Dsonar.login=${SONAR_TOKEN}
+            """
+          }
+          // Note: If you prefer local scanner binary, remove the docker block above and use the local sonar-scanner.
         }
       }
     }
 
     stage('Quality Gate') {
       steps {
-        // waits for SonarQube to call back and return the quality gate result
         script {
-          timeout(time: 5, unit: 'MINUTES') {
+          timeout(time: 15, unit: 'MINUTES') {
             def qg = waitForQualityGate()
+            if (qg == null) {
+              error "No Quality Gate result received from SonarQube"
+            }
             echo "Quality Gate status: ${qg.status}"
             if (qg.status != 'OK') {
               error "Quality Gate failed: ${qg.status}"
